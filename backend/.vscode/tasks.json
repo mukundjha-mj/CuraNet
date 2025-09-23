@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Install backend deps and types",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"npm pkg set scripts.setup=\"npm i express jsonwebtoken bcrypt dotenv @types/express @types/jsonwebtoken @types/node --save && npm i -D ts-node nodemon\"; npm run setup"
+			]
+		}
+	]
+}
