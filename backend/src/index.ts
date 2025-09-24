@@ -8,6 +8,8 @@ dotenv.config();
 
 // Routes
 import authRoutes from './routes/auth.routes';
+import recordRoutes from './routes/records.routes';
+import adminRoutes from './routes/admin.routes';
 
 const app = express();
 
@@ -22,6 +24,8 @@ app.use(cookieParser());
 
 // Mount routes
 app.use('/api/auth', authRoutes);
+app.use('/api/records', recordRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Simple liveness endpoint (POST-only)
 app.post('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));

@@ -104,3 +104,72 @@ model PasswordResetToken {
   @@index([expiresAt])
   @@map("password_reset_tokens")
 }
+
+/// FHIR-lite additions
+enum ConsentStatus {
+  active
+  revoked
+  expired
+}
+
+model Consent {
+  id          String        @id @default(cuid())
+  patientId   String
+  providerId  String
+  status      ConsentStatus @default(active)
+  expiresAt   DateTime?
+  createdAt   DateTime      @default(now())
+  revokedAt   DateTime?
+
+  @@index([patientId, providerId])
+  @@index([status])
+  @@map("consents")
+}
+
+model Encounter {
+  id             String   @id @default(cuid())
+  patientId      String
+  providerId     String
+  type           String
+  reason         String?
+  startTime      DateTime
+  endTime        DateTime?
+  notes          String?
+
+  // provenance
+  createdById    String
+  createdByRole  String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  observations   Observation[]
+
+  @@index([patientId])
+  @@index([providerId])
+  @@index([startTime])
+  @@map("encounters")
+}
+
+model Observation {
+  id             String   @id @default(cuid())
+  patientId      String
+  providerId     String
+  encounterId    String?
+  code           String
+  value          Json
+  unit           String?
+  recordedAt     DateTime @default(now())
+
+  // provenance
+  createdById    String
+  createdByRole  String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  encounter      Encounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([providerId])
+  @@index([encounterId])
+  @@map("observations")
+}
