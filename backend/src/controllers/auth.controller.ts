@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { EventEmitter } from 'events';
 import { PrismaClient } from '@prisma/client';
+import EmailService from '../services/email.service';
 
 dotenv.config();
 
@@ -155,6 +156,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             token: verificationToken,
             userId: newUser.id
         });
+        // Also send immediately (sync) for now; later move to async worker
+        try {
+            await EmailService.sendVerificationEmail(normalizedEmail, verificationToken);
+        } catch (e) {
+            console.warn('Email send failed (dev fallback used if configured):', e);
+        }
 
         // In development, log and optionally return the verification token for easy testing
         const isProduction = process.env.NODE_ENV === 'production';
@@ -176,7 +183,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
 export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { token } = req.body;
+        const token = (req.body as any)?.token ?? (req.query as any)?.token;
 
         if (!token) {
             res.status(400).json({ message: 'Verification token is required' });
@@ -607,6 +614,69 @@ export const health = async (_req: Request, res: Response): Promise<void> => {
     }
 };
 
+// Resend email verification
+export const resendVerification = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const email = (req.body as any)?.email ?? (req.query as any)?.email;
+        if (!email) {
+            res.status(400).json({ message: 'Email is required' });
+            return;
+        }
+        const normalizedEmail = String(email).toLowerCase().trim();
+        const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+        // Always return 200 to avoid user enumeration
+        if (!user) {
+            res.json({ message: 'If the account exists, a verification email has been sent' });
+            return;
+        }
+        if (user.status !== 'pending_verification') {
+            res.json({ message: 'Account already verified or not eligible' });
+            return;
+        }
+
+        // Find an existing valid verification token
+        let verification = await prisma.emailVerification.findFirst({
+            where: {
+                userId: user.id,
+                usedAt: null,
+                expiresAt: { gt: new Date() },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        let token: string;
+        if (!verification) {
+            token = generateSecureToken();
+            const tokenHash = hashToken(token);
+            const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            verification = await prisma.emailVerification.create({
+                data: {
+                    userId: user.id,
+                    tokenHash,
+                    expiresAt: tokenExpiry,
+                },
+            });
+        } else {
+            // Can't recover original token from hash; issue a new one for resend
+            token = generateSecureToken();
+            const tokenHash = hashToken(token);
+            verification = await prisma.emailVerification.create({
+                data: {
+                    userId: user.id,
+                    tokenHash,
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                },
+            });
+        }
+
+        await EmailService.sendVerificationEmail(normalizedEmail, token);
+        res.json({ message: 'Verification email sent' });
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
 export default {
     register,
     verifyEmail,
@@ -616,5 +686,6 @@ export default {
     requestPasswordReset,
     resetPassword,
     profile,
-    health
+    health,
+    resendVerification,
 };

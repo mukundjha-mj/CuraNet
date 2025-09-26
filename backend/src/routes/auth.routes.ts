@@ -18,14 +18,17 @@ const strictRateLimit = rateLimitByIP(5, 60 * 1000); // 5 requests per minute
 // Public routes (with rate limiting)
 router.post('/register', authRateLimit, authController.register);
 router.post('/verify-email', authRateLimit, authController.verifyEmail);
+router.get('/verify-email', authRateLimit, authController.verifyEmail);
 router.post('/login', authRateLimit, authController.login);
 router.post('/request-password-reset', strictRateLimit, authController.requestPasswordReset);
 router.post('/reset-password', authRateLimit, authController.resetPassword);
+router.post('/resend-verification', authRateLimit, authController.resendVerification);
 
 // Protected routes (require authentication)
 router.post('/refresh', authController.refresh);
 router.post('/logout', authenticateToken, authController.logout);
 router.post('/profile', authenticateToken, authController.profile);
+router.get('/me', authenticateToken, authController.profile);
 
 // Health check
 router.post('/health', authController.health);
